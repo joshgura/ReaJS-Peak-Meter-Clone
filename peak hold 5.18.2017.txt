@@ -3,8 +3,6 @@ desc:meter with peak 5.18.2017
 //just an exercise to try and duplicate the ReaJS meter.
 //to-do: turn this into a module with private variables in the functions.
 
-// MODIFIED TO TEST GIT
-
 @init
 
 meter_x = meter_y = 0;
