@@ -1,0 +1,154 @@
+desc:meter with peak 5.18.2017
+//last edited 5.18.2017
+//just an exercise to try and duplicate the ReaJS meter.
+//to-do: turn this into a module with private variables in the functions.
+
+// MODIFIED TO TEST GIT
+
+@init
+
+meter_x = meter_y = 0;
+main_decay_rate = 45 / srate; 
+maxpeak = spl0_hold = spl1_hold = spl0_peak = spl1_peak = peak_db = -360;
+
+//---------------------------- MAIN dB FUNCTION -----------------------------//
+function db(input)
+(
+20 * log10(input);
+);
+
+//------------------------------- DRAW METER --------------------------------//
+function draw_meter(x, meter_db)
+(
+gfx_r=0.2;gfx_g=0.6;gfx_b=0.8;
+gfx_x = meter_x + x; gfx_y = gfx_h;
+(meter_db > -62) &  (meter_db <= 0) ? (         // trying not to draw offscreen
+  y2 = main_meter_h * (-meter_db/62) + clip_indicator_h;
+  ):(y2 = gfx_y;);                          
+  gfx_rect(gfx_x,y2,15,main_meter_h - y2 + clip_indicator_h);
+);
+
+function draw_peak(x, peak)
+(
+(peak > -62) & (peak <= 0) ? (
+  gfx_r=0.2;gfx_g=0.6;gfx_b=0.8;     
+  gfx_x = x; gfx_y = main_meter_h * (-peak/62) + clip_indicator_h;
+  gfx_rect(gfx_x,gfx_y,15,1);
+  );
+);
+
+//------------------------- CLIP / PEAK INDICATOR ---------------------------//
+
+function draw_clip_indicator()   // if signal is > 0dB, stays red until clicked
+( 
+  clip_indicator == 1 ? (            // if true, bright red, if false, dark red
+    gfx_r=0.8;gfx_g=0;gfx_b=0;):(gfx_r=0.35;gfx_g=0;gfx_b=0;);
+  gfx_rect( 0,0,32,clip_indicator_h );
+);
+
+function print_peak(x, peak_text)                 // displays the highest value
+(
+  gfx_setfont(idx=1, Monospace, 12);
+  gfx_x=x + 8; gfx_y=(clip_indicator_h * 0.5 -6);
+  gfx_r=1;gfx_g=1;gfx_b=1;
+  peak_text >= 0 ? gfx_drawstr("+");
+  peak_text >= -150 ? (
+  gfx_drawnumber(peak_text,1);
+  ):(
+  gfx_drawstr("-inf");
+  );
+);
+
+//------------------------------- dB SCALE ----------------------------------//
+function draw_db_scale()
+(
+  gfx_h >= 175 ? ( db_num = 0;gfx_y=clip_indicator_h-4; ):
+    ( db_num = 1;gfx_y=2*clip_indicator_h-4; );
+  vertical_increment=clip_indicator_h;
+  gfx_h > 0 ?(
+    loop(11,
+      db_num > 1 ? (gfx_x=meter_x + 9;):(gfx_x=meter_x + 12);
+
+      gfx_y+=1;tmp=gfx_x;  gfx_r=0;gfx_g=0;gfx_b=0;       // drop shadow, black
+      gfx_drawstr("-");gfx_drawnumber(db_num*6,0);gfx_drawstr("-");
+      gfx_y-=1;gfx_x=tmp-1;  gfx_r=1;gfx_g=1;gfx_b=1;        // foreground text
+      gfx_drawstr("-");gfx_drawnumber(db_num*6,0);gfx_drawstr("-");
+    
+      gfx_h >= 175 ?(
+        db_num += 1;
+        gfx_y+=vertical_increment;
+        ):(
+        db_num += 2;
+        gfx_y+=vertical_increment*2;
+      ); 
+    );
+  );
+);
+
+@slider
+
+@block
+
+@sample
+
+spl0_abs = abs(spl0);
+spl1_abs = abs(spl1);
+
+spl0_db = db(spl0_abs);
+spl1_db = db(spl1_abs);
+
+//----------------------------- METER TIMER ---------------------------------//
+spl0_db > spl0_hold ? spl0_hold = spl0_db;                         // smoothing
+spl1_db > spl1_hold ? spl1_hold = spl1_db;
+
+spl0_hold -= main_decay_rate; 
+spl1_hold -= main_decay_rate;
+
+rms_db -= main_decay_rate*0.5; 
+
+//---------------------------- PEAKS DETECT ---------------------------------//
+spl0_db > spl0_peak ? (spl0_peak = spl0_db; peak_timer = srate;);
+spl1_db > spl1_peak ? (spl1_peak = spl1_db; peak_timer = srate;);
+
+//------------------------------ MAX PEAK -----------------------------------// 
+peak_db = max(spl0_peak, spl1_peak);
+peak_db > maxpeak ? maxpeak = peak_db;
+maxpeak >= 0 ? clip_indicator = 1;         // maxpeak should stay until clicked
+
+peak_timer < 0 ? spl0_peak = spl1_peak = -360;                    // reset peak
+peak_timer -= 1;
+
+//--------------------------- SAVE OLD VALUES -------------------------------//
+old_spl0_db = spl0_db; old_spl1_db = spl1_db;
+
+@gfx 640 480
+
+clip_indicator_h = gfx_h/11.3;
+main_meter_h = gfx_h - clip_indicator_h; 
+  
+//-------------------------- METER BACKGROUND -------------------------------//
+gfx_r=0.0;gfx_g=0.2;gfx_b=0.25;  i=0;
+loop(2,gfx_rect(meter_x+i,clip_indicator_h,15,gfx_h-clip_indicator_h);i=17;);
+
+//----------------------------- MAIN METERS ---------------------------------//
+draw_meter(meter_x, spl0_hold);                          
+draw_meter(meter_x + 17, spl1_hold);  
+
+//---------------------------- PEAKS METERS ---------------------------------//
+peak_timer > 0 ? (
+  draw_peak( meter_x, spl0_peak ); 
+  draw_peak( meter_x + 17, spl1_peak );
+  );       
+
+//------------------------- BIG RED CLIP LIGHT ------------------------------//
+draw_clip_indicator();      
+(mouse_x < 32) & (mouse_y < clip_indicator_h) & mouse_cap == 1 ? (
+  clip_indicator = 0;
+  maxpeak = max(spl0_hold,spl1_hold); 
+  );
+print_peak(0,maxpeak);                             // draw the peak value in db
+
+//------------------------------ dB RULER -----------------------------------//
+draw_db_scale();
+
+
